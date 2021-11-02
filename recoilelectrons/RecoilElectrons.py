@@ -127,11 +127,11 @@ if not Layout == "original" and not Layout == "andreas":
   print("Error: The neural network layout must be one of [original, andreas], and not: {}".format(Layout))
   sys.exit(0)
 
-#if os.path.exists(OutputDirectory):
-#  Now = datetime.now()
-#  OutputDirectory += Now.strftime("_%Y%m%d_%H%M%S")
-#os.makedirs(OutputDirectory)
-
+if not os.path.exists(OutputDirectory):
+  os.makedirs(OutputDirectory)
+Now = datetime.now()
+OutputDirectory += Now.strftime("_%Y%m%d_%H%M%S")
+print(OutputDirectory)
 
 
 ###################################################################################################
@@ -341,6 +341,7 @@ def CheckPerformance():
 
     #print(Result[e])
     #print(OutputTensor[e])
+    DistDiffList, AngleDiffList = [], []
 
     for e in range(0, BatchSize):
       Event = TestingDataSets[e + Batch*BatchSize]
@@ -387,7 +388,8 @@ def CheckPerformance():
       SumDistDiff += DistDiff
       SumAngleDiff += AngleDiff
       TotalEvents += 1
-
+      DistDiffList.append(DistDiff)
+      AngleDiffList.append(AngleDiff)
 
       # Some debugging
       if Batch == 0 and e < 50:
@@ -407,8 +409,15 @@ def CheckPerformance():
       BestStartCorrect = SumStartCorrect / TotalEvents
 
     print("\n\n--> Status: distance difference = {:-6.2f} cm (best: {:-6.2f} cm), angle difference = {:-6.2f} deg (best: {:-6.2f} deg), start correct = {:5.2f}% (best: {:5.2f}%)\n\n".format(SumDistDiff / TotalEvents, BestLocation, SumAngleDiff / TotalEvents, BestAngle, 100 * SumStartCorrect / TotalEvents, 100.0 * BestStartCorrect))
+    plt.scatter(DistDiffList, AngleDiffList, marker='o')
+    plt.xlabel('Distance Difference')
+    plt.ylabel('Angle Difference')
+    plot_filename = "DistanceVersusAnglePlot"
+    #plot_filepath = os.path.join(OutputDirectory, plot_filename+".png")
+    plt.savefig("Results" + "/" + plot_filename+".png")
+    plt.show()
 
-  return Improvement
+  return Improvement, SumDistDiff / TotalEvents, SumAngleDiff / TotalEvents
 
 
 ###################################################################################################
@@ -425,6 +434,9 @@ Iteration = 0
 MaxIterations = 50000
 TimesNoImprovement = 0
 MaxTimesNoImprovement = 50
+
+performance_filename = "Performance"
+
 while Iteration < MaxIterations:
   Iteration += 1
   print("\n\nStarting iteration {}".format(Iteration))
@@ -476,7 +488,7 @@ while Iteration < MaxIterations:
   # Step 2: Check current performance
   TimerTesting = time.time()
   print("\nCurrent loss: {}".format(Loss))
-  Improvement = CheckPerformance()
+  Improvement, Dist_Diff, Angle_Diff = CheckPerformance()
 
   if Improvement == True:
     TimesNoImprovement = 0
@@ -495,7 +507,16 @@ while Iteration < MaxIterations:
   print("\n\nTotal time converting per Iteration: {} sec".format(TimeConverting/Iteration))
   print("Total time training per Iteration:   {} sec".format(TimeTraining/Iteration))
   print("Total time testing per Iteration:    {} sec".format(TimeTesting/Iteration))
+  
+  performance_file = open("Results/Performance.txt", "a")
+  tofile = "\nCurrent loss: {}".format(Loss) + "\nDistance Difference: {}".format(Dist_Diff) + "\nAngle Difference: {}".format(Angle_Diff)
+  performance_file.write(tofile)
+  performance_file.close()
 
+  if Improvement == True:
+    model_path = os.path.join(OutputDirectory, 'saved_model_{}.h5'.format(Iteration))
+    Model.save(filepath=model_path)
+  
   # Take care of Ctrl-C
   if Interrupted == True: break
 
